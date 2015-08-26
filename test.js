@@ -40,12 +40,20 @@ test('string creation', function(t) {
 
     var values = ['myid', 'wisconsin', 'nothing', 600, 400, 0.5, 0.4, 0.4, 400, 0, 0, 0];    
     var result = dbutil.updateString(image.fields, values, 'image');
-    t.equal(result, 'update image set (image_id,name,description,width,height,radius,x,y,z,angleX,angleY,angleZ)  =  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) where image_id = $1')
+    t.equal(result, 'update image set (image_id, name, description, width, height, radius, x, y)  =  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) where image_id = $1')
     var result = dbutil.insertString(image.fields, values, 'image');
-    t.equal(result, 'insert into image (image_id,name,description,width,height,radius,x,y,z,angleX,angleY,angleZ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ');
+    t.equal(result, 'insert into image (image_id, name, description, width, height, radius, x, y) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ');
 
     t.end();
 });
+
+test('table creation string', function(t) {
+
+    var result = dbutil.createTableString('image', image.imageFields);
+    //console.log(result);
+    t.equal(result, 'create table if not exists image (image_id text primary key, name text not null, description text, width numeric, height numeric, radius numeric, x numeric, y numeric) ');
+    t.end();
+})
 
 test('can insert an image', function(t) {
 
@@ -63,7 +71,7 @@ test('can insert an image', function(t) {
         image.imageTable(client, function(err, result) {
             
             t.notOk(err);
-            var values = ['wisconsin', 'nothing', 600, 400, 0.5, 0.4, 0.4, 400, 0, 0, 0];
+            var values = ['wisconsin', 'nothing', 600, 400, 0.5, 0.4, 0.4];
             dbutil.insert(null, image.fields, values, 'image', client, function(err, result) {
 
                 t.notOk(err);

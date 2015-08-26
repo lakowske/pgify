@@ -13,10 +13,29 @@ function dropTable(table, client, callback) {
 }
 
 /*
+ * Create a table using the fields
+ */
+function createTableString(table, fields) {
+    return 'create table if not exists '
+        + table
+        + fieldNames(fullFields(fields));
+}
+
+/*
+ * Converts a list of fields containing names and predicates to
+ * a list of field strings of the form 'field.name field.predicate'
+ */
+function fullFields(fields) {
+    return fields.map(function(field) {
+        return field.name + ' ' + field.predicate;
+    })
+}
+
+/*
  * joins fields into a sql insert representation.
  */
 function fieldNames(fields) {
-    return ' (' + fields.join() + ') ';
+    return ' (' + fields.join(', ') + ') ';
 }
 
 function fieldValues(values) {
@@ -40,10 +59,8 @@ function updateString(fields, values, table) {
 function update(fields, values, table, client, callback) {
     var cmd = updateString(fields, values, table);
 
-    client.query(cmd, values, function(err, result) {
-        if (err) console.log(err);
-        callback(err, result)
-    });
+    client.query(cmd, values, callback);
+
 }
 
 /*
@@ -95,7 +112,67 @@ function exists(table, field, value, client, callback) {
     });
 }
 
-module.exports.dropTable    = dropTable;
-module.exports.insert       = insert;
-module.exports.updateString = updateString;
-module.exports.insertString = insertString;
+function get(table, field, value, client, callback) {
+    var select = 'select * from '+ table + ' where ' + field + ' = $1';
+
+    client.query(select, [value], function(err, result) {
+        callback(err, result, true);
+    });
+}
+
+function all(table, client, callback) {
+
+    var all = 'select * from '+ table;
+
+    client.query(all, [], function(err, result) {
+        callback(err, result);
+    });
+
+}
+
+/*
+ * Return the values in object specified in fields.  Returns the values in
+ * the order the fields appear in fields list.
+ */
+function values(fields, object) {
+
+    var vals = [];
+    
+    for (var prop in object) {
+        if (fields.indexOf(prop) > 0) {
+            vals.push(object[prop]);
+        }
+    }
+
+    return vals;
+    
+}
+
+/*
+ * Return the fields in object.  Returns fields in
+ * order they appear in fields list.
+ */
+function fields(fields, object) {
+
+    var flds = [];
+    
+    for (var prop in object) {
+        if (fields.indexOf(prop) > 0) {
+            flds.push(prop);
+        }
+    }
+
+    return flds;
+    
+}
+
+module.exports.createTableString = createTableString;
+module.exports.dropTable         = dropTable;
+module.exports.insert            = insert;
+module.exports.update            = update;
+module.exports.updateString      = updateString;
+module.exports.insertString      = insertString;
+module.exports.get               = get;
+module.exports.all               = all;
+module.exports.values            = values;
+module.exports.fields            = fields;
