@@ -5,7 +5,7 @@
 var dbutil = require('./db-util');
 
 module.exports.imageFields = [
-    {name : 'image_id', predicate : 'text primary key'},
+    {name : 'id', predicate : 'text primary key'},
     {name : 'name', predicate : 'text not null'},
     {name : 'description', predicate : 'text'},
     {name : 'width', predicate : 'numeric'},
@@ -16,7 +16,7 @@ module.exports.imageFields = [
 ]
 
 module.exports.sceneNode = [
-    {name : 'node_id', predicate : 'text primary key'},
+    {name : 'id', predicate : 'text primary key'},
     {name : 'name', predicate : 'text'},
     {name : 'parent', predicate : 'text'},
     {name : 'about_up', predicate : 'numeric not null'},

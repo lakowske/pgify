@@ -58,49 +58,56 @@ function updateString(fields, values, table) {
 
 function update(fields, values, table, client, callback) {
     var cmd = updateString(fields, values, table);
-
     client.query(cmd, values, callback);
+}
+
+function insertOrUpdate(object, validFields, table, client, callback) {
+
+    //ensure an id
+    if (object.id) {
+        var id = object.id;
+    } else {
+        object.id = uuid.v4();
+    }
+
+    return insert(object, validFields, table, client, callback);
 
 }
 
 /*
  * insert a record with a given id, or null to generate a new record.
  *
- * id       - optional id
- * fields   - list of field names including the id
- * values   - list of field values excluding the id value
+ * fields   - list of field names with the id at index 0
+ * values   - list of field values with the id value at index 0
  * table    - table name
  * client   - pg client object
  * callback - called when db response available.
  */
-function insert(id, fields, values, table, client, callback) {
+function insert(object, validFields, table, client, callback) {
 
-    var insertId = uuid.v4();
-    
-    if (id === null) id = insertId;
-    
+    var v = values(validFields, object);
+    var f = fields(validFields, object);
+
     var onInsert = function() {
 
-        values.unshift(id);
-        
-        var cmd = insertString(fields, values, table);
+        var cmd = insertString(f, v, table);
 
-        client.query(cmd, values, function(err, result) {
-            callback(err, result, id);
+        client.query(cmd, v, function(err, result) {
+            callback(err, result, object.id);
         })
 
     }
 
-    exists(table, fields[0], id, client, function(err, result) {
-        if (err) console.log(err);
+    exists(table, 'id', object.id, client, function(err, result) {
+        if (err) console.error(err);
         if (result.rowCount > 0) {
-            update(fields, values, table, client, callback);
+            update(f, v, table, client, callback);
         } else {
             onInsert();
         }
     });
 
-    return insertId;
+    return object.id;
 
 }
 
@@ -137,10 +144,11 @@ function all(table, client, callback) {
 function values(fields, object) {
 
     var vals = [];
-    
-    for (var prop in object) {
-        if (fields.indexOf(prop) > 0) {
-            vals.push(object[prop]);
+    var keys = Object.keys(object);
+
+    for (var i = 0 ; i < fields.length ; i++) {
+        if (keys.indexOf(fields[i]) >= 0) {
+            vals.push(object[fields[i]]);
         }
     }
 
@@ -155,10 +163,11 @@ function values(fields, object) {
 function fields(fields, object) {
 
     var flds = [];
+    var keys = Object.keys(object);
     
-    for (var prop in object) {
-        if (fields.indexOf(prop) > 0) {
-            flds.push(prop);
+    for (var i = 0 ; i < fields.length ; i++) {
+        if (keys.indexOf(fields[i]) >= 0) {
+            flds.push(fields[i]);
         }
     }
 
@@ -168,6 +177,7 @@ function fields(fields, object) {
 
 module.exports.createTableString = createTableString;
 module.exports.dropTable         = dropTable;
+module.exports.insertOrUpdate    = insertOrUpdate;
 module.exports.insert            = insert;
 module.exports.update            = update;
 module.exports.updateString      = updateString;
