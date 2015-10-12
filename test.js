@@ -4,8 +4,21 @@
 
 var test    = require('tape');
 var pg      = require('pg');
-var image   = require('./image');
 var dbutil  = require('./db-util');
+
+imageFields = [
+    {name : 'id', type: 'text', predicate : 'primary key'},
+    {name : 'name', type: 'text', predicate : 'not null'},
+    {name : 'description', type : 'text'},
+    {name : 'width', type : 'integer'},
+    {name : 'height', type : 'integer'},
+    {name : 'radius', type : 'float(53)'},
+    {name : 'x', type : 'integer'},
+    {name : 'y', type : 'integer'},
+    {name : 'orientation', type : 'float(53)[3][3]'},
+    {name : 'rotation', type : 'float(53)[4][4]'}
+]
+
 
 test('can create image table', function(t) {
 
@@ -20,7 +33,7 @@ test('can create image table', function(t) {
             return console.error('error fetching client from pool', err);
         }
 
-        image.imageTable(client, function(err, result) {
+        client.query(dbutil.createTableString('image', imageFields), function(err, result) {
             
             t.notOk(err);
 
@@ -39,19 +52,19 @@ test('can create image table', function(t) {
 test('string creation', function(t) {
 
     var values = ['myid', 'wisconsin', 'nothing', 600, 400, 0.5, 0.4, 0.4, 400, 0, 0, 0];    
-    var result = dbutil.updateString(image.fields, values, 'image');
-    t.equal(result, 'update image set (image_id, name, description, width, height, radius, x, y)  =  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) where image_id = $1')
-    var result = dbutil.insertString(image.fields, values, 'image');
-    t.equal(result, 'insert into image (image_id, name, description, width, height, radius, x, y) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ');
+    var result = dbutil.updateString(dbutil.fieldNames(imageFields), values, 'image');
+    t.equal(result, 'update image set (id, name, description, width, height, radius, x, y)  =  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) where id = $1')
+    var result = dbutil.insertString(dbutil.fieldNames(imageFields), values, 'image');
+    t.equal(result, 'insert into image (id, name, description, width, height, radius, x, y) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ');
 
     t.end();
 });
 
 test('table creation string', function(t) {
 
-    var result = dbutil.createTableString('image', image.imageFields);
+    var result = dbutil.createTableString('image', imageFields);
     //console.log(result);
-    t.equal(result, 'create table if not exists image (image_id text primary key, name text not null, description text, width numeric, height numeric, radius numeric, x numeric, y numeric) ');
+    t.equal(result, 'create table if not exists image (id text primary key, name text not null, description text, width integer, height integer, radius float(53), x integer, y integer) ');
     t.end();
 })
 
@@ -68,11 +81,22 @@ test('can insert an image', function(t) {
             return console.error('error fetching client from pool', err);
         }
 
-        image.imageTable(client, function(err, result) {
+        client.query(dbutil.createTableString('image', imageFields), function(err, result) {
             
             t.notOk(err);
-            var values = ['wisconsin', 'nothing', 600, 400, 0.5, 0.4, 0.4];
-            dbutil.insert(null, image.fields, values, 'image', client, function(err, result) {
+
+            var object = {
+                'id' : 'test-id',
+                'name' : 'wisconsin',
+                'description' : 'nothing',
+                'width' : 640,
+                'height': 480,
+                'radius': 0.5,
+                'x' : 1,
+                'y' : 2,
+            }
+            
+            dbutil.insert(object, dbutil.fieldNames(imageFields), 'image', client, function(err, result) {
 
                 t.notOk(err);
                 dbutil.dropTable('image', client, function(err, result) {
@@ -87,4 +111,12 @@ test('can insert an image', function(t) {
 
     })
 
+})
+
+test('can create an object', function(t) {
+
+    var object = dbutil.getObject(imageFields);
+
+    console.log(object);
+    t.end();
 })

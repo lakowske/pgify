@@ -18,7 +18,7 @@ function dropTable(table, client, callback) {
 function createTableString(table, fields) {
     return 'create table if not exists '
         + table
-        + fieldNames(fullFields(fields));
+        + joinFieldNames(fullFields(fields));
 }
 
 /*
@@ -27,14 +27,21 @@ function createTableString(table, fields) {
  */
 function fullFields(fields) {
     return fields.map(function(field) {
-        return field.name + ' ' + field.predicate;
+        if (field.predicate)
+            return field.name + ' ' + field.type + ' ' + field.predicate;
+        
+        return field.name + ' ' + field.type;
     })
+}
+
+function fieldNames(fields) {
+    return fields.map(function(field) {return field.name});
 }
 
 /*
  * joins fields into a sql insert representation.
  */
-function fieldNames(fields) {
+function joinFieldNames(fields) {
     return ' (' + fields.join(', ') + ') ';
 }
 
@@ -48,12 +55,12 @@ function fieldValues(values) {
 }
 
 function insertString(fields, values, table) {
-    return 'insert into ' + table + fieldNames(fields) + 'VALUES' + fieldValues(values);
+    return 'insert into ' + table + joinFieldNames(fields) + 'VALUES' + fieldValues(values);
 }
 
-function updateString(fields, values, table) {
-    return 'update ' + table + ' set' + fieldNames(fields) + ' = ' + fieldValues(values)
-        + 'where ' + fields[0] + ' = $1';
+function updateString(fieldNames, values, table) {
+    return 'update ' + table + ' set' + joinFieldNames(fieldNames) + ' = ' + fieldValues(values)
+        + 'where ' + fieldNames[0] + ' = $1';
 }
 
 function update(fields, values, table, client, callback) {
@@ -75,18 +82,18 @@ function insertOrUpdate(object, validFields, table, client, callback) {
 }
 
 /*
- * insert a record with a given id, or null to generate a new record.
+ * insert a record.
  *
- * fields   - list of field names with the id at index 0
- * values   - list of field values with the id value at index 0
- * table    - table name
- * client   - pg client object
- * callback - called when db response available.
+ * @param {Object} object containing values to insert
+ * @param {list} validFields to pick from object
+ * @param {String} table name
+ * @param {Object} client pg client object
+ * @param {Function} callback called when db response available.
  */
-function insert(object, validFields, table, client, callback) {
+function insert(object, validFieldNames, table, client, callback) {
 
-    var v = values(validFields, object);
-    var f = fields(validFields, object);
+    var v = values(validFieldNames, object);
+    var f = fields(validFieldNames, object);
 
     var onInsert = function() {
 
@@ -127,6 +134,46 @@ function get(table, field, value, client, callback) {
     });
 }
 
+/**
+ * @param {List} fields list containing names and types to create an object from.
+ * @return object
+ */
+function getObject(fields) {
+
+    var object = {};
+
+    fields.map(function(field) {
+        object[field.name] = getValue(field.type, field.predicate);
+    });
+
+    return object;
+}
+
+function getValue(type, predicate) {
+    var typeValues = {
+        'text' : '',
+        'integer' : 0,
+        'float(53)' : 0.0,
+        'float(53)[4][4]' : [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ],
+        'float(53)[3][3]' : [
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1
+        ]
+    }
+
+    if (type === 'text' && predicate === 'primary key') {
+        return uuid.v4();
+    }
+    
+    return typeValues[type];
+}
+
 function all(table, client, callback) {
 
     var all = 'select * from '+ table;
@@ -158,7 +205,7 @@ function values(fields, object) {
 
 /*
  * Return the fields in object.  Returns fields in
- * order they appear in fields list.
+ * the order they appear in fields list.
  */
 function fields(fields, object) {
 
@@ -186,3 +233,5 @@ module.exports.get               = get;
 module.exports.all               = all;
 module.exports.values            = values;
 module.exports.fields            = fields;
+module.exports.fieldNames        = fieldNames;
+module.exports.getObject         = getObject;
