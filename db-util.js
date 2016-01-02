@@ -4,6 +4,42 @@
 
 var uuid         = require('node-uuid');
 
+
+function map(client, list, fn) {
+    var index = 0;
+
+    var seq = function(err, result) {
+        if (err) {console.log(err)};
+        index++;
+        if (index < list.length) {
+            fn(client, list[index], seq);
+        }
+    }
+
+    fn(client, list[index], seq);
+}
+
+/*
+ * Takes a list of functions with the call signature fn(client, cb(err, result))
+ */
+function compose(client, fns, callback) {
+    var index = 0;
+    var fn = fns[index];
+    
+    var seq = function(err, result) {
+        if (err) {console.log(err)};
+        index++;
+        if (index < fns.length) {
+            fn = fns[index];            
+            fn(client, seq);
+        } else {
+            callback(err, result);
+        }
+    }
+
+    fn(client, seq);
+}
+
 function dropTable(table, client, callback) {
 
     var dropRequests = 'drop table ' + table + ' cascade'
@@ -13,12 +49,41 @@ function dropTable(table, client, callback) {
 }
 
 /*
- * Create a table using the fields
+ * Create a sql string defining a table using the given fields and table args
  */
 function createTableString(table, fields) {
     return 'create table if not exists '
         + table
         + joinFieldNames(fullFields(fields));
+}
+
+/*
+ * Create a table
+ */
+function createTable(client, table, fields, callback) {
+
+    var create = createTableString(table, fields);
+
+    console.log(create);
+
+    client.query(create, callback);
+
+}
+
+function dropAndCreateTable(client, table, fields, callback) {
+    dropTable(table, client, function(err, result) {
+        if (err) { console.log(err) }
+        createTable(client, table, fields, callback);
+    })
+}
+
+/*
+ * Turn on ltree extension
+ */
+function ltree(client, callback) {
+
+    client.query('CREATE EXTENSION ltree', callback);
+
 }
 
 /*
@@ -58,6 +123,15 @@ function insertString(fields, values, table) {
     return 'insert into ' + table + joinFieldNames(fields) + 'VALUES' + fieldValues(values);
 }
 
+function upsertString(fields, values, table) {
+    var f = fields.slice(0, values.length);
+    
+    var insertStr = insertString(f, values, table);
+    insertStr += ' on conflict (' + f[0] + ') do update set' + joinFieldNames(f) + ' = ' + fieldValues(values)
+        + 'where ' + table + '.' + f[0] + ' = $1';
+    return insertStr;
+}
+
 function updateString(fieldNames, values, table) {
     return 'update ' + table + ' set' + joinFieldNames(fieldNames) + ' = ' + fieldValues(values)
         + 'where ' + fieldNames[0] + ' = $1';
@@ -66,6 +140,28 @@ function updateString(fieldNames, values, table) {
 function update(fields, values, table, client, callback) {
     var cmd = updateString(fields, values, table);
     client.query(cmd, values, callback);
+}
+
+/*
+ * Insert a record or update if it already exists.
+ *
+ * @param {Object} object containing values to insert
+ * @param {list} validFields to pick from object
+ * @param {String} table name
+ * @param {Object} client pg client object
+ * @param {Function} callback called when db response available.
+ */
+function upsert(object, validFields, table, client, callback) {
+
+    var v = values(validFields, object);
+    var f = fields(validFields, object);
+
+    var cmd = upsertString(f, v, table);
+
+    client.query(cmd, v, function(err, result) {
+        callback(err, result, object.id);
+    })
+    
 }
 
 function insertOrUpdate(object, validFields, table, client, callback) {
@@ -78,7 +174,6 @@ function insertOrUpdate(object, validFields, table, client, callback) {
     }
 
     return insert(object, validFields, table, client, callback);
-
 }
 
 /*
@@ -223,15 +318,21 @@ function fields(fields, object) {
 }
 
 module.exports.createTableString = createTableString;
+module.exports.createTable       = createTable;
 module.exports.dropTable         = dropTable;
 module.exports.insertOrUpdate    = insertOrUpdate;
 module.exports.insert            = insert;
+module.exports.upsert            = upsert;
 module.exports.update            = update;
 module.exports.updateString      = updateString;
 module.exports.insertString      = insertString;
+module.exports.upsertString      = upsertString;
 module.exports.get               = get;
 module.exports.all               = all;
 module.exports.values            = values;
 module.exports.fields            = fields;
 module.exports.fieldNames        = fieldNames;
 module.exports.getObject         = getObject;
+module.exports.ltree             = ltree;
+module.exports.compose           = compose;
+module.exports.dropAndCreateTable = dropAndCreateTable;
